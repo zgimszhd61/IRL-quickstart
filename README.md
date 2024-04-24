@@ -8,80 +8,111 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Environment setup
+# 环境设置
 class GridWorld:
-    def __init__(self, width, height):
+    def __init__(self, width, height, start, goal, obstacle_rate=0.2):
         self.width = width
         self.height = height
+        self.start = start
+        self.goal = goal
         self.states = [(x, y) for x in range(width) for y in range(height)]
-        self.end_states = [(width-1, height-1)]  # Terminal position
-        print(f"Initialized GridWorld of size {width}x{height}")
+        self.end_states = [goal]  # 终点位置
+        self.obstacles = self.init_obstacles(obstacle_rate)
+
+    def init_obstacles(self, obstacle_rate):
+        obstacles = set()
+        while len(obstacles) < int(self.width * self.height * obstacle_rate):
+            obstacle = (np.random.randint(0, self.width), np.random.randint(0, self.height))
+            if obstacle != self.start and obstacle != self.goal:
+                obstacles.add(obstacle)
+        return obstacles
 
     def actions(self, state):
         actions = []
         x, y = state
-        if x > 0:
-            actions.append((-1, 0))  # Left
-        if x < self.width - 1:
-            actions.append((1, 0))  # Right
-        if y > 0:
-            actions.append((0, -1))  # Down
-        if y < self.height - 1:
-            actions.append((0, 1))  # Up
+        if x > 0 and (x-1, y) not in self.obstacles:
+            actions.append((-1, 0))  # 左
+        if x < self.width - 1 and (x+1, y) not in self.obstacles:
+            actions.append((1, 0))  # 右
+        if y > 0 and (x, y-1) not in self.obstacles:
+            actions.append((0, -1))  # 下
+        if y < self.height - 1 and (x, y+1) not in self.obstacles:
+            actions.append((0, 1))  # 上
         return actions
 
     def next_state(self, state, action):
-        return (state[0] + action[0], state[1] + action[1])
+        next_state = (state[0] + action[0], state[1] + action[1])
+        return next_state if next_state not in self.obstacles else state
 
     def is_terminal(self, state):
         return state in self.end_states
 
-# Reward function
+# 奖励函数
 def reward_function(state):
-    return -1  # Deduct 1 point for each step
+    return -1  # 每走一步扣除1分
 
-# Expert's trajectory
+# 专家的轨迹
 def generate_expert_trajectory(grid, policy):
     trajectory = []
-    state = (0, 0)
+    state = grid.start
     while not grid.is_terminal(state):
         action = policy(state)
         trajectory.append((state, action))
         state = grid.next_state(state, action)
-    print(f"Generated expert trajectory: {trajectory}")
     return trajectory
 
-# Random policy as an expert example
+# 随机策略作为专家示例
 def expert_policy(state):
-    actions = [(1, 0), (0, 1)]  # Can only move right or up
-    return actions[np.random.choice(len(actions))]
+    actions = grid.actions(state)  # 获取当前状态可行的动作
+    return actions[np.random.choice(len(actions))] if actions else None
 
-# Initialize environment
-grid = GridWorld(5, 5)
+# 用户输入初始点和目标点
+start_point = (0, 0)  # 示例初始点
+goal_point = (4, 4)  # 示例目标点
+
+# 初始化环境
+grid = GridWorld(5, 5, start_point, goal_point)
+
+# 打印初始化的网格世界所有状态和障碍物
+print("Initialized GridWorld States:")
+for state in grid.states:
+    if state in grid.obstacles:
+        print(f"Obstacle at {state}", end=' ')
+    elif state == start_point:
+        print(f"Start at {state}", end=' ')
+    elif state == goal_point:
+        print(f"Goal at {state}", end=' ')
+    else:
+        print(state, end=' ')
+print()  # 打印一个换行符，以美观地分隔输出内容
+
 expert_trajectories = [generate_expert_trajectory(grid, expert_policy) for _ in range(10)]
 
-# Inverse reinforcement learning algorithm
+# 打印专家轨迹
+for idx, trajectory in enumerate(expert_trajectories):
+    print(f"Trajectory {idx + 1}:")
+    for state, action in trajectory:
+        print(f"State: {state}, Action: {action}")
+
+# 逆强化学习算法（无修改，只为完整性重复）
 def irl(grid, expert_trajectories, epochs, learning_rate):
-    # Initialize reward estimation
     estimated_rewards = np.zeros((grid.width, grid.height))
-    for epoch in range(epochs):
+    for _ in range(epochs):
         gradient = np.zeros_like(estimated_rewards)
-        # For each expert trajectory
         for trajectory in expert_trajectories:
             for state, _ in trajectory:
                 gradient[state] += 1
-        # Gradient descent to update reward function
         estimated_rewards -= learning_rate * gradient
-        print(f"Epoch {epoch+1}: Updated estimated rewards")
     return estimated_rewards
 
-# Run IRL
+# 运行IRL
 estimated_rewards = irl(grid, expert_trajectories, 100, 0.01)
 
-# Visualize results
+# 可视化结果
 plt.imshow(estimated_rewards, cmap='hot', interpolation='nearest')
 plt.colorbar()
 plt.show()
+
 ```
 
 这段代码首先定义了一个5x5的网格世界，其中只有一个终点状态。我们使用了一个简单的策略来生成专家的轨迹，这个策略是随机向右或向上移动。然后，我们实现了一个基本的逆强化学习算法，它使用梯度下降方法来调整估计的奖励函数，以便最大化地匹配专家的行为。
